@@ -1,0 +1,83 @@
+@startuml UML部署图
+' MultiBilling - 部署图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam node {
+  BackgroundColor #F8FAFC
+  BorderColor #94A3B8
+  FontColor #0F172A
+}
+skinparam artifact {
+  BackgroundColor #FFFFFF
+  BorderColor #94A3B8
+}
+skinparam database {
+  BackgroundColor #E6F4F1
+  BorderColor #0F766E
+}
+skinparam cloud {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+}
+
+title MultiBilling 部署图
+
+node "用户设备" as ClientZone {
+  node "桌面浏览器\nChrome / Edge / Safari" as Desktop
+  node "移动浏览器\niOS Safari / Android Chrome" as Mobile
+}
+
+node "应用服务器\nDocker Host（Linux, 2C4G）" as ServerZone {
+  node "Nginx 容器\n443 / 80" as Nginx {
+    artifact "TLS 证书"
+    artifact "静态资源 dist/"
+  }
+
+  node "Spring Boot 容器\n8080" as App {
+    artifact "multibilling-api.jar"
+    artifact "领域服务 + 工作流"
+  }
+
+  node "MySQL 8.0 容器\n3306" as DB {
+    database "multibilling\n业务库 + 存档库" as Schema
+  }
+
+  node "Redis 7 容器\n6379" as Cache {
+    database "session / lock / cache" as RedisData
+  }
+
+  node "MinIO 容器\n9000 / 9001" as ObjectStore {
+    database "attachments bucket" as Bucket
+  }
+}
+
+node "备份与运维" as Ops {
+  node "每日备份\nmysqldump + 对象存储版本" as Backup
+  node "日志与监控\nActuator + 日志轮转" as Monitor
+}
+
+Desktop --> Nginx : HTTPS / WSS
+Mobile --> Nginx : HTTPS / WSS
+Nginx --> App : HTTP 8080\n反向代理
+App --> DB : JDBC 3306\n事务写入
+App --> Cache : RESP 6379\n会话 / 分布式锁
+App --> ObjectStore : S3 API 9000\n附件上传 / 签名下载
+DB --> Backup : 每日全量备份
+App --> Monitor : 指标 / 健康检查
+
+note right of App
+  单实例部署时使用本地事务；
+  多实例扩展时，存档哈希链通过
+  Redis 每账本写锁串行化。
+end note
+
+note bottom of ObjectStore
+  附件不直接暴露公网；下载必须
+  先通过账本成员校验，再签发短时
+  （5 分钟）预签名 URL。
+end note
+
+@enduml

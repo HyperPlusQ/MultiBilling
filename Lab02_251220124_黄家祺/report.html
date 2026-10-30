@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>实验二 · MultiBilling · 251220124 黄家祺</title>
+<style>
+  @page { size: A4; margin: 12mm 12mm 12mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Heiti SC", "Microsoft YaHei", sans-serif;
+    font-size: 8.5pt;
+    line-height: 1.45;
+    color: #1a1a1a;
+  }
+  h1 {
+    font-size: 11pt;
+    border-bottom: 1pt solid #333;
+    padding-bottom: 2pt;
+    margin: 10pt 0 5pt;
+    break-before: page;
+  }
+  h1:first-of-type { break-before: auto; }
+  h2 { font-size: 9.5pt; margin: 6pt 0 2pt; }
+  h3 { font-size: 9pt; margin: 5pt 0 2pt; }
+  p { margin: 0 0 3pt; text-indent: 2em; }
+  p.ni { text-indent: 0; }
+  ul { margin: 1pt 0 3pt; padding-left: 1.4em; }
+  li { margin-bottom: 0.5pt; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2pt 0 5pt;
+    font-size: 7pt;
+    line-height: 1.3;
+  }
+  th {
+    background: #f0f0f0;
+    font-weight: 600;
+    text-align: left;
+    padding: 2pt 3pt;
+    border: 0.5pt solid #999;
+  }
+  td { padding: 1.5pt 3pt; border: 0.5pt solid #ccc; vertical-align: top; }
+  tr { break-inside: avoid; }
+  td.c, th.c { text-align: center; }
+  figure { margin: 2pt 0 4pt; text-align: center; break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 100mm; border: 0.5pt solid #ddd; }
+  figcaption { font-size: 7pt; color: #555; margin-top: 1pt; }
+  .figrow { display: flex; gap: 4pt; justify-content: center; flex-wrap: wrap; }
+  .figrow figure { flex: 1; min-width: 45%; margin: 2pt 0; }
+  .figrow img { max-height: 85mm; }
+  .figrow3 img { max-height: 75mm; }
+  .note {
+    border-left: 2pt solid #555;
+    background: #f8f8f8;
+    padding: 3pt 6pt;
+    margin: 3pt 0 5pt;
+    font-size: 7.5pt;
+    break-inside: avoid;
+  }
+  code { font-family: Menlo, monospace; font-size: 7.5pt; background: #f0f0f0; padding: 0 2pt; }
+  .title-block { text-align: center; padding: 16pt 0 8pt; }
+  .title-block h1 { border: none; font-size: 16pt; margin: 0; break-before: auto; }
+  .title-block .sub { font-size: 10pt; color: #555; margin: 3pt 0 12pt; }
+  .title-block .info { font-size: 9pt; line-height: 1.8; text-align: left; display: inline-block; }
+  .title-block .info b { display: inline-block; width: 45pt; }
+</style>
+</head>
+<body>
+
+<div class="title-block">
+  <h1>软件工程 · 实验二</h1>
+  <div class="sub">软件设计与建模</div>
+  <div class="info">
+    <div><b>项目</b>MultiBilling 团队账目记录工具</div>
+    <div><b>学号</b>251220124</div>
+    <div><b>姓名</b>黄家祺</div>
+    <div><b>日期</b>2026-10-30</div>
+  </div>
+</div>
+
+<h1>一、项目概述</h1>
+<p class="ni">MultiBilling 是面向团队/小组/家庭的多人共享记账工具。实验一整理出 17 条需求（REQ-001~017），核心问题：协作授权、审核流转、变更留痕、桌面移动适配。</p>
+
+<h2>技术选型</h2>
+<table>
+  <tr><th style="width:18%">层次</th><th style="width:30%">选型</th><th>理由</th></tr>
+  <tr><td>前端</td><td>Vue 3 + TypeScript + Vite</td><td>组合式 API 模块拆分；TS 编译期校验枚举。</td></tr>
+  <tr><td>接入层</td><td>Nginx</td><td>HTTPS、静态资源、反向代理。</td></tr>
+  <tr><td>应用层</td><td>Spring Boot 3 / Java 17</td><td>事务、校验生态成熟。</td></tr>
+  <tr><td>数据库</td><td>MySQL 8.0</td><td>强一致；JSON 存快照与配置。</td></tr>
+  <tr><td>缓存/锁</td><td>Redis 7</td><td>会话、每账本写锁。</td></tr>
+  <tr><td>对象存储</td><td>MinIO（S3 兼容）</td><td>附件分离存储，预签名下载。</td></tr>
+  <tr><td>部署</td><td>Docker Compose</td><td>五容器一键拉起。</td></tr>
+</table>
+
+<h1>二、主要功能与模块划分</h1>
+
+<h2>2.1 主要功能</h2>
+<table>
+  <tr><th class="c" style="width:5%">序号</th><th style="width:18%">功能</th><th>说明</th><th class="c" style="width:12%">需求</th></tr>
+  <tr><td class="c">F1</td><td>账户注册与登录</td><td>手机号/邮箱注册，密码登录，会话保持。</td><td class="c">REQ-017</td></tr>
+  <tr><td class="c">F2</td><td>创建账本与有效期</td><td>发起者创建账本，定义名称与有效期，生成 8 位邀请码。</td><td class="c">REQ-001</td></tr>
+  <tr><td class="c">F3</td><td>邀请与退出</td><td>邀请码加入；成员可退出，退出后不可读数据。</td><td class="c">REQ-016</td></tr>
+  <tr><td class="c">F4</td><td>身份与权限</td><td>身份{发起者,参与者} × 权限{管理员,成员}；发起者不可降级。</td><td class="c">REQ-002</td></tr>
+  <tr><td class="c">F5</td><td>发起者转让</td><td>转让给其他成员，原发起者保留管理员权限。</td><td class="c">REQ-001、002</td></tr>
+  <tr><td class="c">F6</td><td>条目提交</td><td>名称/类别/方向/金额/时间/原因/附件；字段+金额+有效期校验。</td><td class="c">REQ-003</td></tr>
+  <tr><td class="c">F7</td><td>四分区管理</td><td>未审核/已审核/已驳回/无效；草稿仅提交人可见。</td><td class="c">REQ-004</td></tr>
+  <tr><td class="c">F8</td><td>审核工作流</td><td>通过/打回/要求补充；打回必填原因；写入存档。</td><td class="c">REQ-004</td></tr>
+  <tr><td class="c">F9</td><td>搜索与筛选</td><td>关键字+类别+成员+时间+金额五维组合。</td><td class="c">REQ-006</td></tr>
+  <tr><td class="c">F10</td><td>统计报表</td><td>总览/类别/成员/时间/金额区间；仅统计已审核。</td><td class="c">REQ-005、007</td></tr>
+  <tr><td class="c">F11</td><td>修改草稿/被驳回</td><td>提交人可编辑 DRAFT/REJECTED 条目。</td><td class="c">REQ-008</td></tr>
+  <tr><td class="c">F12</td><td>已审核修改申请</td><td>需证明附件；通过后原条目 INVALID，新条目 PENDING 重审。</td><td class="c">REQ-009</td></tr>
+  <tr><td class="c">F13</td><td>作废申请与投票</td><td>管理员发起，半数以上投票同意；一人一票，超时失效。</td><td class="c">REQ-010</td></tr>
+  <tr><td class="c">F14</td><td>操作存档</td><td>追加写+哈希链；仅 INSERT/SELECT 权限。</td><td class="c">REQ-011</td></tr>
+  <tr><td class="c">F15</td><td>重复条目证明</td><td>同账本时间+金额+方向相同需 PROOF 附件。</td><td class="c">REQ-012</td></tr>
+  <tr><td class="c">F16</td><td>金额限制</td><td>发起者设单笔上限，超限标记严格审核。</td><td class="c">REQ-013</td></tr>
+  <tr><td class="c">F17</td><td>响应式与防误操作</td><td>三档断点；不可逆操作二次确认。</td><td class="c">REQ-014、015</td></tr>
+</table>
+
+<h2>2.2 功能模块划分</h2>
+<table>
+  <tr><th style="width:13%">模块</th><th style="width:27%">职责</th><th style="width:24%">核心类</th><th style="width:12%">界面</th><th class="c">需求</th></tr>
+  <tr><td>账户与认证</td><td>注册、登录、会话</td><td>AuthService、User</td><td>01</td><td class="c">REQ-017</td></tr>
+  <tr><td>账本管理</td><td>创建、有效期、邀请码、退出、转让</td><td>LedgerService、Ledger</td><td>02</td><td class="c">REQ-001、016</td></tr>
+  <tr><td>成员与权限</td><td>身份权限授予、管理员任免、金额限制</td><td>MemberService、PermissionPolicy</td><td>09</td><td class="c">REQ-002、013</td></tr>
+  <tr><td>条目管理</td><td>草稿/提交/编辑/四分区/检索/附件</td><td>EntryService、EntryWorkflow、DuplicateChecker</td><td>04、05、06</td><td class="c">REQ-003、004、006、008、012</td></tr>
+  <tr><td>审核工作流</td><td>通过/打回/补充；修改申请审批</td><td>ReviewService、ModificationRequest</td><td>06、07</td><td class="c">REQ-004、009</td></tr>
+  <tr><td>作废投票</td><td>发起、投票、计票、超时</td><td>VoidRequestService、VoidApprovalPolicy</td><td>07</td><td class="c">REQ-010</td></tr>
+  <tr><td>统计报表</td><td>多维统计（仅 APPROVED）</td><td>StatisticsService</td><td>03、08</td><td class="c">REQ-005、007</td></tr>
+  <tr><td>操作存档</td><td>事件订阅、追加写、哈希链</td><td>AuditLogService、OperationLog</td><td>10</td><td class="c">REQ-011</td></tr>
+  <tr><td>附件服务</td><td>上传、校验、预签名下载</td><td>AttachmentService、MinIO</td><td>05、06</td><td class="c">REQ-012、017</td></tr>
+  <tr><td>前端外壳</td><td>布局、导航、响应式</td><td>AppShell</td><td>11、12</td><td class="c">REQ-014、015</td></tr>
+</table>
+
+<h1>三、软件架构设计</h1>
+
+<h2>3.1 分层架构</h2>
+<table>
+  <tr><th style="width:14%">层次</th><th style="width:24%">组成</th><th>职责</th></tr>
+  <tr><td>表现层</td><td>Vue 3 SPA</td><td>渲染、表单校验；权限隐藏仅作体验层。</td></tr>
+  <tr><td>接入层</td><td>Nginx</td><td>HTTPS、静态资源、/api/** 反向代理。</td></tr>
+  <tr><td>接口层</td><td>REST Controller</td><td>DTO 校验、上下文解析；无业务分支。</td></tr>
+  <tr><td>应用层</td><td>应用服务</td><td>用例编排、事务、领域事件。</td></tr>
+  <tr><td>领域层</td><td>实体、策略</td><td>状态迁移、重复判定、金额限制、投票、权限。</td></tr>
+  <tr><td>基础设施层</td><td>仓储、MinIO、Redis、MySQL</td><td>持久化、存储、缓存。</td></tr>
+</table>
+
+<h2>3.2 模块交互</h2>
+<ul>
+  <li>写路径单向：Controller → Service → Domain → Repository。</li>
+  <li>存档旁路：领域事件驱动，业务与存档同事务。</li>
+  <li>统计只读：固定 status='APPROVED'。</li>
+</ul>
+
+<h2>3.3 部署结构</h2>
+<p class="ni">单机 Docker：Nginx(443/80) → Spring Boot(8080) → MySQL(3306) / Redis(6379) / MinIO(9000)。外部仅 Nginx 暴露端口。</p>
+
+<h2>3.4 数据存储</h2>
+<p class="ni">11 张核心表，围绕 Ledger 聚合根。</p>
+<table>
+  <tr><th style="width:18%">表</th><th style="width:42%">关键字段</th><th>约束</th></tr>
+  <tr><td>user</td><td>user_id, username, password_hash, display_name, status</td><td>username 唯一；BCrypt</td></tr>
+  <tr><td>ledger</td><td>ledger_id, name, valid_from/to, owner_id, invite_code, amount_limit, status</td><td>invite_code 唯一</td></tr>
+  <tr><td>ledger_member</td><td>member_id, ledger_id, user_id, identity, role, joined_at, left_at</td><td>唯一 (ledger_id, user_id)</td></tr>
+  <tr><td>category</td><td>category_id, ledger_id, name, direction, color, sort_no</td><td>账本内类别名唯一</td></tr>
+  <tr><td>entry</td><td>entry_id, ledger_id, submitter_id, category_id, title, direction, amount, occurred_at, reason, status, strict_review, replaces_entry_id, version</td><td>idx(ledger_id, status, occurred_at)；乐观锁</td></tr>
+  <tr><td>attachment</td><td>attachment_id, entry_id, uploader_id, file_key, sha256, purpose</td><td>purpose ∈ {GENERAL, PROOF}</td></tr>
+  <tr><td>review_record</td><td>review_id, entry_id, reviewer_id, action, comment</td><td>action ∈ {APPROVE, REJECT, REQUEST_SUPPLEMENT}</td></tr>
+  <tr><td>modification_request</td><td>request_id, entry_id, applicant_id, proposed_snapshot(JSON), proof_attachment_id, status</td><td>同条目最多一条进行中</td></tr>
+  <tr><td>void_request</td><td>request_id, entry_id, initiator_id, reason, admin_count_snapshot, status, deadline</td><td>status ∈ {VOTING, PASSED, EXPIRED}</td></tr>
+  <tr><td>void_vote</td><td>vote_id, request_id, admin_id, decision, voted_at</td><td>唯一 (request_id, admin_id)</td></tr>
+  <tr><td>operation_log</td><td>log_id, ledger_id, operator_id, action, target_type/id, detail(JSON), prev_hash, hash</td><td>仅 INSERT/SELECT</td></tr>
+</table>
+<div class="note">四分区不建四张表——是 EntryStatus 的投影，条目移动只是状态变更，外键与存档标识稳定。存档 hash = SHA-256(prev_hash + 规范化 JSON)。</div>
+
+<h2>3.5 关键设计决策</h2>
+<table>
+  <tr><th class="c" style="width:5%">#</th><th style="width:22%">决策</th><th style="width:38%">内容</th><th>理由</th></tr>
+  <tr><td class="c">D1</td><td>身份与权限分离</td><td>MemberIdentity{OWNER,PARTICIPANT} + MemberRole{ADMIN,MEMBER}</td><td>避免角色组合爆炸</td></tr>
+  <tr><td class="c">D2</td><td>四分区=状态投影</td><td>单一 EntryStatus，板块由状态过滤</td><td>历史连续、外键稳定</td></tr>
+  <tr><td class="c">D3</td><td>状态迁移集中</td><td>EntryWorkflow 统一执行，非法抛异常</td><td>避免分散 if 漏洞</td></tr>
+  <tr><td class="c">D4</td><td>乐观锁并发</td><td>entry.version 递增，冲突 409</td><td>记账并发低，乐观锁更轻</td></tr>
+  <tr><td class="c">D5</td><td>作废票数快照</td><td>创建时快照管理员数；agree×2 &gt; snapshot</td><td>避免中途人数变化导致不可解释</td></tr>
+  <tr><td class="c">D6</td><td>修改不改旧条目</td><td>原条目 INVALID，新条目 PENDING 重审</td><td>保留完整历史</td></tr>
+  <tr><td class="c">D7</td><td>存档旁路化</td><td>领域事件驱动，同事务提交</td><td>新增动作无需改存档代码</td></tr>
+  <tr><td class="c">D8</td><td>统计单一出口</td><td>仓储层固定 status='APPROVED'</td><td>防止报表遗漏条件</td></tr>
+</table>
+
+<h1>四、UML 建模</h1>
+<p class="ni">共 9 张图（PlantUML），覆盖结构性、行为性、交互性三类。</p>
+<table>
+  <tr><th class="c" style="width:8%">类别</th><th>图名</th><th>回答的问题</th><th class="c">文件</th></tr>
+  <tr><td class="c" rowspan="4">结构性</td><td>类图（领域模型）</td><td>业务概念、属性、关系、不变量</td><td class="c">UML类图</td></tr>
+  <tr><td>类图（服务协作）</td><td>服务、策略与仓储依赖</td><td class="c">UML类图-服务协作</td></tr>
+  <tr><td>组件图</td><td>模块组成与调用方向</td><td class="c">UML组件图</td></tr>
+  <tr><td>部署图</td><td>节点与容器分布</td><td class="c">UML部署图</td></tr>
+  <tr><td class="c" rowspan="3">行为性</td><td>用例图</td><td>参与者与用例关系</td><td class="c">UML用例图</td></tr>
+  <tr><td>活动图</td><td>条目提交与审核分支</td><td class="c">UML活动图</td></tr>
+  <tr><td>状态图</td><td>条目生命周期状态迁移</td><td class="c">UML状态图</td></tr>
+  <tr><td class="c" rowspan="2">交互性</td><td>时序图：条目提交与审核</td><td>提交与审核协作顺序</td><td class="c">UML时序图-条目提交与审核</td></tr>
+  <tr><td>时序图：作废申请与投票</td><td>多管理员投票计票判定</td><td class="c">UML时序图-作废申请与投票</td></tr>
+</table>
+
+<h2>4.2 类图</h2>
+<div class="figrow">
+  <figure>
+    <img src="UML/UML类图.png" alt="类图">
+    <figcaption>图 4-1 领域模型：12 实体 + 8 枚举，Ledger 为聚合根</figcaption>
+  </figure>
+  <figure>
+    <img src="UML/UML类图-服务协作.png" alt="服务协作类图">
+    <figcaption>图 4-2 服务协作：4 应用服务 + 5 策略 + 仓储接口</figcaption>
+  </figure>
+</div>
+<p class="ni">LedgerMember 同时持 identity 与 role（D1）；Entry-Attachment 一对多，purpose 区分普通/证明附件；ModificationRequest 存字段快照；VoidRequest-VoidVote 主从，(requestId,adminId) 唯一；OperationLog 自引用 prevHash 成链。</p>
+
+<h2>4.3 组件图与部署图</h2>
+<div class="figrow">
+  <figure>
+    <img src="UML/UML组件图.png" alt="组件图">
+    <figcaption>图 4-3 组件图：SPA → Nginx → Spring Boot → MySQL/Redis/MinIO</figcaption>
+  </figure>
+  <figure>
+    <img src="UML/UML部署图.png" alt="部署图">
+    <figcaption>图 4-4 部署图：单机 Docker 五容器拓扑</figcaption>
+  </figure>
+</div>
+
+<h2>4.4 用例图与活动图</h2>
+<div class="figrow">
+  <figure>
+    <img src="UML/UML用例图.png" alt="用例图">
+    <figcaption>图 4-5 用例图：4 类参与者（泛化），22 用例</figcaption>
+  </figure>
+  <figure>
+    <img src="UML/UML活动图.png" alt="活动图">
+    <figcaption>图 4-6 活动图：成员/系统/管理员三泳道，三判断点</figcaption>
+  </figure>
+</div>
+
+<h2>4.5 状态图与时序图</h2>
+<div class="figrow">
+  <figure>
+    <img src="UML/UML状态图.png" alt="状态图">
+    <figcaption>图 4-7 状态图：DRAFT→PENDING→APPROVED/REJECTED→INVALID</figcaption>
+  </figure>
+  <figure>
+    <img src="UML/UML时序图-条目提交与审核.png" alt="时序图1">
+    <figcaption>图 4-8 时序图：提交→校验→重复检测→落库→存档→审核</figcaption>
+  </figure>
+</div>
+<div class="figrow">
+  <figure>
+    <img src="UML/UML时序图-作废申请与投票.png" alt="时序图2">
+    <figcaption>图 4-9 时序图：快照管理员数→创建申请→投票→计票判定</figcaption>
+  </figure>
+</div>
+
+<h1>五、UI 界面设计</h1>
+<p class="ni">主色 #0F766E，状态色：未审核琥珀/已审核绿/已驳回红/无效灰。桌面三档断点（≥1200 三栏/768-1199 两栏/&lt;768 单栏+底部导航）。不可逆操作二次确认。</p>
+
+<h2>5.2 桌面端（界面 01~10）</h2>
+<div class="figrow">
+  <figure>
+    <img src="UI界面/界面01_登录.png" alt="01">
+    <figcaption>界面 01 登录/注册</figcaption>
+  </figure>
+  <figure>
+    <img src="UI界面/界面02_账本列表与创建.png" alt="02">
+    <figcaption>界面 02 我的账本：跨账本总览 + 邀请码加入</figcaption>
+  </figure>
+</div>
+<div class="figrow">
+  <figure>
+    <img src="UI界面/界面03_账本总览.png" alt="03">
+    <figcaption>界面 03 账本总览：指标卡 + 趋势图 + 构成图</figcaption>
+  </figure>
+  <figure>
+    <img src="UI界面/界面04_条目列表与筛选.png" alt="04">
+    <figcaption>界面 04 收支条目：四分区 Tab + 五维筛选</figcaption>
+  </figure>
+</div>
+<div class="figrow">
+  <figure>
+    <img src="UI界面/界面05_新建条目.png" alt="05">
+    <figcaption>界面 05 新建条目：表单 + 右侧检查/规则说明</figcaption>
+  </figure>
+  <figure>
+    <img src="UI界面/界面06_条目详情与审核.png" alt="06">
+    <figcaption>界面 06 条目详情：主栏事实 + 右栏审核操作</figcaption>
+  </figure>
+</div>
+<div class="figrow">
+  <figure>
+    <img src="UI界面/界面07_审批中心.png" alt="07">
+    <figcaption>界面 07 审批中心：修改申请 + 作废投票</figcaption>
+  </figure>
+  <figure>
+    <img src="UI界面/界面08_统计报表.png" alt="08">
+    <figcaption>界面 08 统计报表：口径标注 + 多维图表</figcaption>
+  </figure>
+</div>
+<div class="figrow">
+  <figure>
+    <img src="UI界面/界面09_成员与权限.png" alt="09">
+    <figcaption>界面 09 成员与权限：身份/权限并排 + 金额限制</figcaption>
+  </figure>
+  <figure>
+    <img src="UI界面/界面10_操作存档.png" alt="10">
+    <figcaption>界面 10 操作存档：只读 + 哈希链状态 + 校验</figcaption>
+  </figure>
+</div>
+
+<h2>5.3 移动端（界面 11~12）</h2>
+<div class="figrow figrow3">
+  <figure>
+    <img src="UI界面/界面11_移动端总览.png" alt="11">
+    <figcaption>界面 11 移动端总览</figcaption>
+  </figure>
+  <figure>
+    <img src="UI界面/界面12_移动端条目详情.png" alt="12">
+    <figcaption>界面 12 移动端条目详情</figcaption>
+  </figure>
+</div>
+<p class="ni">移动端单列卡片流 + 底部 Tab 导航；底部固定操作栏提供审核按钮。</p>
+
+<h1>六、大模型辅助设计过程记录</h1>
+<table>
+  <tr><th style="width:18%">使用场景</th><th style="width:30%">生成结果</th><th style="width:26%">优缺点</th><th>修改优化</th></tr>
+  <tr><td>领域模型与类图初稿：将 REQ-001~017 交给大模型识别实体、属性、关系</td><td>9 个类，基数基本正确；但身份权限合并为一个枚举，用三布尔字段表示板块，缺少修改申请/作废实体</td><td>优：速度快、结构完整。缺：对字段语义不敏感，倾向名词变类</td><td>拆分 MemberIdentity/MemberRole；布尔合并为 EntryStatus；新增 5 个实体；Statistics 降级为服务</td></tr>
+  <tr><td>作废投票边界推演：请大模型列出 REQ-010 的边界情况</td><td>7 条边界，覆盖良好；但判定式 agree/admin≥0.5 语义错误，建议实时查人数</td><td>优：清单能力强。缺：自然语言转数学符号易错，倾向最省事实现</td><td>快照管理员总数；agree×2&gt;snapshot（严格多数）；唯一索引保证一人一票；72h 超时</td></tr>
+  <tr><td>UI 布局生成：按设计规范生成 12 个界面 HTML/CSS</td><td>视觉整齐；但 SVG 无 viewBox 撑破卡片、侧栏文字竖排、移动端固定栏遮挡</td><td>优：一致性好、批量快。缺：看不见渲染结果，CSS 失效需实际渲染发现</td><td>Puppeteer 量化测量溢出像素；逐项修复后 12 屏全部通过</td></tr>
+  <tr><td>需求覆盖自查：逐条判断 17 条需求覆盖情况</td><td>指出 3 处遗漏（REQ-012/005/016）；但把「提到过」等同「已实现」</td><td>优：不漏行。缺：无法区分写到与落地，结论仅作待核清单</td><td>逐条人工复核并补充设计</td></tr>
+</table>
+<p class="ni"><b>总结。</b>大模型擅长生成结构化初稿、边界清单、批量一致代码、对照检查；不擅长价值判断、语义精确、需看见结果的验收、确认已实现。有效用法是嵌入可验证循环：生成→客观验证→反馈修正。</p>
+
+<h1>七、需求覆盖矩阵</h1>
+<table>
+  <tr><th class="c" style="width:8%">编号</th><th style="width:16%">需求</th><th style="width:46%">设计落点</th><th style="width:14%">图/界面</th><th class="c">状态</th></tr>
+  <tr><td class="c">REQ-001</td><td>账本创建</td><td>Ledger（name, validFrom/To, ownerId, inviteCode）</td><td>图 4-1、4-5；界面 02</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-002</td><td>角色与权限</td><td>MemberIdentity + MemberRole + PermissionPolicy</td><td>图 4-1、4-2；界面 09</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-003</td><td>条目提交</td><td>Entry 实体；字段+金额+有效期校验</td><td>图 4-2、4-6、4-8；界面 05</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-004</td><td>审核与分区</td><td>EntryStatus 五状态 + EntryWorkflow；ReviewService</td><td>图 4-4、4-7、4-8；界面 04、06</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-005</td><td>统计仅已审核</td><td>仓储固定 status='APPROVED'；页面标注口径</td><td>图 4-3；界面 03、08</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-006</td><td>搜索筛选</td><td>五维组合查询；idx(ledger_id, status, occurred_at)</td><td>图 4-6；界面 04</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-007</td><td>分类统计</td><td>StatisticsService 四组聚合</td><td>图 4-3；界面 08</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-008</td><td>修改草稿/驳回</td><td>DRAFT/REJECTED 可编辑；乐观锁</td><td>图 4-7；界面 05、06</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-009</td><td>修改申请</td><td>ModificationRequest 快照+附件；原 INVALID 新 PENDING</td><td>图 4-1、4-2；界面 07</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-010</td><td>作废投票</td><td>VoidRequest+VoidVote；快照+严格多数+72h</td><td>图 4-2、4-9；界面 07</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-011</td><td>操作存档</td><td>追加写+哈希链；仅 INSERT/SELECT</td><td>图 4-1、4-3；界面 10</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-012</td><td>重复证明</td><td>DuplicateChecker 时间+金额+方向；仅 PROOF 附件</td><td>图 4-2、4-6；界面 05、06</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-013</td><td>金额限制</td><td>Ledger.amountLimit + AmountLimitPolicy</td><td>图 4-2、4-6；界面 05、09</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-014</td><td>防误操作</td><td>二次确认+检查清单+描边按钮+结果前置</td><td>界面 05、06、12</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-015</td><td>桌面移动适配</td><td>三档断点；桌面 10 屏+移动 2 屏验证</td><td>界面 01-12</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-016</td><td>邀请与退出</td><td>inviteCode 加入；leftAt 退出；历史条目保留</td><td>图 4-1、4-5；界面 02、09</td><td class="c">已覆盖</td></tr>
+  <tr><td class="c">REQ-017</td><td>数据安全</td><td>BCrypt；会话令牌；成员校验；5min 预签名下载</td><td>图 4-3、4-4；界面 01、06</td><td class="c">已覆盖</td></tr>
+</table>
+
+<h1>八、假设与待确认事项</h1>
+<table>
+  <tr><th class="c" style="width:6%">#</th><th style="width:28%">事项</th><th style="width:32%">假设</th><th>影响</th></tr>
+  <tr><td class="c">A1</td><td>作废投票期限</td><td>72h 未达票数置 EXPIRED</td><td>VoidApprovalPolicy</td></tr>
+  <tr><td class="c">A2</td><td>重复判定维度</td><td>同账本时间+金额+方向相同</td><td>DuplicateChecker</td></tr>
+  <tr><td class="c">A3</td><td>并行修改申请</td><td>同条目最多一条进行中</td><td>modification_request 唯一索引</td></tr>
+  <tr><td class="c">A4</td><td>退出成员历史条目</td><td>保留，显示「已退出成员」</td><td>Entry.submitterId 展示</td></tr>
+  <tr><td class="c">A5</td><td>账本过期</td><td>只读：可查看导出，不可新增/审核</td><td>Ledger 状态</td></tr>
+  <tr><td class="c">A6</td><td>金额限制边界</td><td>等于未超限，超过才严格审核</td><td>AmountLimitPolicy</td></tr>
+  <tr><td class="c">A7</td><td>附件大小与类型</td><td>≤20MB；PDF/JPG/PNG</td><td>AttachmentService</td></tr>
+  <tr><td class="c">A8</td><td>发起者转让后权限</td><td>保留管理员，可被新发起者取消</td><td>PermissionPolicy</td></tr>
+</table>
+
+<h1>九、总结</h1>
+<p class="ni">本次实验将 17 条需求推进到可实现粒度：10 模块、9 张 UML 图、11 张表、12 个界面，覆盖全部需求。</p>
+<ul>
+  <li><b>UML 的价值</b>在于迫使回答「为什么」——身份权限是否拆分、四板块是否建四张表、已审核能否直接回未审核，这些在需求中无答案，必须自定规则。</li>
+  <li><b>规则集中比完整更重要。</b>状态/权限/金额/重复/投票/统计口径收敛到少数策略类后，新增规则只改一处，测试逐条覆盖。</li>
+  <li><b>界面是规则的一部分。</b>统计口径写在标题下、提交后果写在按钮旁、还需几票画成进度条——把后端约束翻译成用户可感知的信息。</li>
+</ul>
+<p class="ni">不足：未绘制包图与 ER 图；界面仅静态验证；若干规则基于假设；设计未经过实现检验。</p>
+
+</body>
+</html>

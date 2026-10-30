@@ -1,0 +1,95 @@
+@startuml UML活动图
+' MultiBilling - 条目提交与审核活动图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam activity {
+  BackgroundColor #E6F4F1
+  BorderColor #0F766E
+  FontColor #0F172A
+  ArrowColor #475569
+  DiamondBackgroundColor #FFFFFF
+  DiamondBorderColor #94A3B8
+}
+skinparam swimlane {
+  BorderColor #CBD5E1
+  TitleBackgroundColor #F1F5F9
+  TitleFontColor #0F172A
+  TitleFontStyle bold
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #F59E0B
+}
+
+title MultiBilling 条目提交与审核活动图
+
+|成员|
+start
+:进入账本，点击"新建条目";
+:填写名称、收支时间、金额、类别、原因;
+:上传证明 / 补充附件（可选）;
+:提交条目;
+
+|系统|
+:校验必填字段、金额 > 0、账本在有效期内;
+if (校验通过?) then (否)
+  :返回字段错误或非法金额提示;
+  :保留表单内容，等待成员修改后重新提交;
+  stop
+else (是)
+endif
+:检索同账本内"时间 + 金额 + 类型"相同的条目;
+if (存在重复?) then (是)
+  :标记"需提供证明附件";
+  if (附件中已包含证明?) then (否)
+    :阻止提交并提示补充证明;
+    :通知成员上传证明附件;
+    stop
+  else (是)
+  endif
+else (否)
+endif
+:比较发起者设置的金额限制;
+if (金额高于限制?) then (是)
+  :标记"严格审核"，按自定义规则要求追加证明;
+else (否)
+endif
+:创建条目，状态 = 未审核（PENDING）;
+:写入操作存档 SUBMIT;
+note right
+  任一校验失败都不会创建条目；
+  校验、落库与存档在同一事务内完成。
+end note
+
+|管理员|
+:打开待审核条目;
+:查看条目内容、附件与历史存档;
+if (审核决定?) then (通过)
+  |系统|
+  :状态 = 已审核（APPROVED），记录审核人与时间;
+  :写入操作存档 APPROVE;
+elseif (打回)
+  |系统|
+  :状态 = 已驳回（REJECTED），记录打回原因;
+  :写入操作存档 REJECT;
+  |成员|
+  :修改被驳回条目后重新提交;
+else (要求补充材料)
+  |系统|
+  :保持未审核，标记 supplementRequested;
+  :写入操作存档 REQUEST_SUPPLEMENT;
+  |成员|
+  :补充附件或说明后重新提交;
+endif
+
+|系统|
+:按审核结果更新板块归属
+（已审核 / 已驳回 / 未审核·待补充）;
+:统计查询仅包含状态为已审核的条目;
+:按类别 / 成员 / 时间 / 金额汇总;
+stop
+
+@enduml

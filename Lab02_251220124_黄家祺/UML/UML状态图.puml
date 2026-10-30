@@ -1,0 +1,59 @@
+@startuml UML状态图
+' MultiBilling - 收支条目状态图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #94A3B8
+  FontColor #0F172A
+  ArrowColor #475569
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #F59E0B
+}
+
+title MultiBilling 收支条目状态图
+
+state "草稿\nDRAFT" as Draft
+state "未审核\nPENDING" as Pending
+state "已审核\nAPPROVED" as Approved
+state "已驳回\nREJECTED" as Rejected
+state "无效\nINVALID" as Invalid
+
+[*] --> Draft : 成员新建条目
+Draft --> Pending : 提交（字段/金额/重复校验通过）
+Pending --> Approved : 管理员审核通过
+Pending --> Rejected : 管理员打回
+Pending --> Pending : 要求补充材料\n（supplementRequested = true）
+Rejected --> Pending : 成员修改后重新提交
+Approved --> Invalid : 作废申请获严格多数管理员同意
+Approved --> Invalid : 修改申请通过\n（原条目作废，新条目进入 Pending）
+Invalid --> [*] : 终态，不可恢复
+
+note right of Pending
+  未审核板块包含 PENDING；
+  要求补充材料仍停留在该板块，
+  通过 supplementRequested 标记区分。
+end note
+
+note right of Approved
+  只有 APPROVED 参与统计；
+  修改申请通过后原条目进入 INVALID，
+  新条目以 PENDING 状态重新审核。
+end note
+
+note bottom of Invalid
+  无效条目保留原始数据与存档，
+  仅从统计与业务列表中排除。
+end note
+
+note bottom of Rejected
+  成员只能修改自己的草稿与
+  未审批通过（含已驳回）的条目。
+end note
+
+@enduml

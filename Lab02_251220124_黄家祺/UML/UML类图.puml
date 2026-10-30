@@ -1,0 +1,245 @@
+@startuml UML类图
+' MultiBilling - 领域模型类图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam nodesep 46
+skinparam ranksep 60
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #94A3B8
+  ArrowColor #475569
+  HeaderBackgroundColor #E6F4F1
+  AttributeFontColor #334155
+  AttributeFontSize 13
+  StereotypeFontSize 11
+}
+skinparam package {
+  BackgroundColor #F8FAFC
+  BorderColor #CBD5E1
+  FontColor #0F172A
+  FontStyle bold
+}
+hide circle
+hide empty members
+skinparam classAttributeIconSize 0
+
+title MultiBilling 领域模型类图（实体与枚举）
+
+  class "用户 User" as User {
+    - userId: Long
+    - username: String
+    - passwordHash: String
+    - displayName: String
+    - status: UserStatus
+    + isEnabled(): boolean
+  }
+
+  class "账本 Ledger" as Ledger {
+    - ledgerId: Long
+    - name: String
+    - validFrom: LocalDate
+    - validTo: LocalDate
+    - ownerId: Long
+    - inviteCode: String
+    - amountLimit: BigDecimal
+    - strictRule: JsonNode
+    - status: LedgerStatus
+    + isExpired(today: LocalDate): boolean
+    + owner(): LedgerMember
+  }
+
+  class "账本成员 LedgerMember" as LedgerMember {
+    - memberId: Long
+    - ledgerId: Long
+    - userId: Long
+    - identity: MemberIdentity
+    - role: MemberRole
+    - joinedAt: LocalDateTime
+    + isOwner(): boolean
+    + isAdmin(): boolean
+  }
+
+  class "收支类别 Category" as Category {
+    - categoryId: Long
+    - ledgerId: Long
+    - name: String
+    - direction: EntryDirection
+    - color: String
+    - sortNo: int
+  }
+
+  class "收支条目 Entry" as Entry {
+    - entryId: Long
+    - ledgerId: Long
+    - submitterId: Long
+    - categoryId: Long
+    - title: String
+    - direction: EntryDirection
+    - amount: BigDecimal
+    - occurredAt: LocalDateTime
+    - reason: String
+    - status: EntryStatus
+    - supplementRequested: boolean
+    - strictReview: boolean
+    - replacesEntryId: Long
+    - version: int
+    + isEditableBy(userId: Long): boolean
+    + markSubmitted(): void
+    + markApproved(reviewerId: Long): void
+    + markRejected(reviewerId: Long): void
+    + markInvalid(reason: String): void
+  }
+
+  class "附件 Attachment" as Attachment {
+    - attachmentId: Long
+    - ledgerId: Long
+    - entryId: Long
+    - uploaderId: Long
+    - fileKey: String
+    - fileName: String
+    - contentType: String
+    - sizeBytes: long
+    - sha256: String
+    - purpose: AttachmentPurpose
+  }
+
+  class "审核记录 ReviewRecord" as ReviewRecord {
+    - reviewId: Long
+    - entryId: Long
+    - reviewerId: Long
+    - action: ReviewAction
+    - comment: String
+    - createdAt: LocalDateTime
+  }
+
+  class "修改申请 ModificationRequest" as ModificationRequest {
+    - requestId: Long
+    - entryId: Long
+    - applicantId: Long
+    - proposedSnapshot: JsonNode
+    - proofAttachmentId: Long
+    - status: RequestStatus
+    - reviewedBy: Long
+    - reviewedAt: LocalDateTime
+  }
+
+  class "作废申请 VoidRequest" as VoidRequest {
+    - requestId: Long
+    - entryId: Long
+    - initiatorId: Long
+    - reason: String
+    - adminCountSnapshot: int
+    - status: RequestStatus
+    - deadline: LocalDateTime
+    + isPassed(agreeCount: int): boolean
+  }
+
+  class "作废投票 VoidVote" as VoidVote {
+    - voteId: Long
+    - requestId: Long
+    - adminId: Long
+    - decision: VoteDecision
+    - votedAt: LocalDateTime
+  }
+
+  class "操作存档 OperationLog" as OperationLog {
+    - logId: Long
+    - ledgerId: Long
+    - operatorId: Long
+    - action: String
+    - targetType: String
+    - targetId: Long
+    - detail: JsonNode
+    - prevHash: String
+    - hash: String
+    - createdAt: LocalDateTime
+    + verify(prevHash: String): boolean
+  }
+
+  enum "条目状态 EntryStatus" as EntryStatus {
+    DRAFT
+    PENDING
+    APPROVED
+    REJECTED
+    INVALID
+  }
+
+  enum "成员身份 MemberIdentity" as MemberIdentity {
+    OWNER
+    PARTICIPANT
+  }
+
+  enum "成员权限 MemberRole" as MemberRole {
+    ADMIN
+    MEMBER
+  }
+
+  enum "收支方向 EntryDirection" as EntryDirection {
+    INCOME
+    EXPENSE
+  }
+
+  enum "申请状态 RequestStatus" as RequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    EXPIRED
+  }
+
+  enum "附件用途 AttachmentPurpose" as AttachmentPurpose {
+    PROOF
+    SUPPLEMENT
+  }
+
+  enum "审核动作 ReviewAction" as ReviewAction {
+    APPROVE
+    REJECT
+    REQUEST_SUPPLEMENT
+  }
+
+  enum "投票决定 VoteDecision" as VoteDecision {
+    AGREE
+    DISAGREE
+  }
+
+' ---------- 实体之间的关系 ----------
+User "1" -- "0..*" LedgerMember : 加入 >
+Ledger "1" -- "0..*" LedgerMember : 拥有 >
+Ledger "1" -- "0..*" Category : 定义 >
+Ledger "1" -- "0..*" Entry : 包含 >
+User "1" -- "0..*" Entry : 提交 >
+Category "1" -- "0..*" Entry : 归类 >
+Entry "1" -- "0..*" Attachment : 附带 >
+Entry "1" -- "0..*" ReviewRecord : 产生 >
+Entry "1" -- "0..*" ModificationRequest : 申请修改 >
+Entry "1" -- "0..*" VoidRequest : 申请作废 >
+VoidRequest "1" -- "0..*" VoidVote : 收集 >
+Ledger "1" -- "0..*" OperationLog : 记录 >
+
+' ---------- 枚举依赖 ----------
+LedgerMember ..> MemberIdentity
+LedgerMember ..> MemberRole
+Entry ..> EntryStatus
+Entry ..> EntryDirection
+Attachment ..> AttachmentPurpose
+ReviewRecord ..> ReviewAction
+ModificationRequest ..> RequestStatus
+VoidRequest ..> RequestStatus
+VoidVote ..> VoteDecision
+
+note bottom of Entry
+  四个业务板块是 status 的投影：
+  PENDING=未审核，APPROVED=已审核，
+  REJECTED=已驳回，INVALID=无效；
+  DRAFT 仅提交人可见，不进入板块。
+end note
+
+note bottom of OperationLog
+  追加写：hash = SHA-256(prevHash + 规范化JSON)；
+  数据库账号仅授予 INSERT/SELECT 权限。
+end note
+
+@enduml

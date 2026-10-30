@@ -1,0 +1,152 @@
+@startuml UML类图-服务协作
+title MultiBilling 领域服务与仓储协作类图（分层设计）
+left to right direction
+' MultiBilling - 领域服务与仓储协作类图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam nodesep 40
+skinparam ranksep 55
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #94A3B8
+  ArrowColor #475569
+  HeaderBackgroundColor #E6F4F1
+  AttributeFontColor #334155
+  AttributeFontSize 13
+  StereotypeFontSize 11
+}
+skinparam package {
+  BackgroundColor #F8FAFC
+  BorderColor #CBD5E1
+  FontColor #0F172A
+  FontStyle bold
+}
+hide circle
+hide empty members
+skinparam classAttributeIconSize 0
+
+
+
+  class "条目服务 EntryService" as EntryService {
+    + createDraft(cmd, user): Entry
+    + updateDraft(id, cmd, user): void
+    + submit(id, user): Entry
+    + search(query, user): Page<Entry>
+  }
+
+  class "审核服务 ReviewService" as ReviewService {
+    + review(id, action, comment, admin): void
+    + applyModification(id, cmd, user): void
+    + approveModification(reqId, admin): void
+  }
+
+  class "作废服务 VoidRequestService" as VoidRequestService {
+    + initiate(entryId, reason, admin): VoidRequest
+    + vote(reqId, decision, admin): void
+    + expireDueRequests(): int
+  }
+
+  class "统计服务 StatisticsService" as StatisticsService {
+    + summary(ledgerId, filter): SummaryVO
+    + byCategory(ledgerId, filter): List<StatVO>
+    + byMember(ledgerId, filter): List<StatVO>
+    + trend(ledgerId, filter): List<PointVO>
+  }
+
+  class "权限策略 PermissionPolicy" as PermissionPolicy {
+    + canSubmit(user, ledger): boolean
+    + canEdit(user, entry): boolean
+    + canReview(user, ledger): boolean
+    + canManageAdmin(operator, target): boolean
+    + canView(member, ledgerId): boolean
+  }
+
+  class "重复检测器 DuplicateChecker" as DuplicateChecker {
+    + findDuplicates(ledgerId, dir, amount, at): List<Entry>
+    + requiresProof(candidate): boolean
+  }
+
+  class "金额限制策略 AmountLimitPolicy" as AmountLimitPolicy {
+    + requiresStrictReview(ledger, amount): boolean
+    + requiredProofCount(ledger, amount): int
+  }
+
+  class "条目工作流 EntryWorkflow" as EntryWorkflow {
+    + transition(entry, action, operator): void
+    + assertAllowed(from, action): void
+  }
+
+  class "投票策略 VoidApprovalPolicy" as VoidApprovalPolicy {
+    + evaluate(req, agreeCount, now): VoteResult
+    + isPassed(agree, adminSnapshot): boolean
+  }
+
+  class "存档服务 AuditLogService" as AuditLogService {
+    + record(event: DomainEvent): void
+    + verifyChain(ledgerId): boolean
+  }
+
+  class "附件服务 AttachmentService" as AttachmentService {
+    + presignUpload(entryId, user): UploadTicket
+    + presignDownload(fileId, user): String
+    + assertProofPresent(entryId): void
+  }
+
+  interface "账本仓储" as LedgerRepository {
+    + findById(ledgerId): Optional<Ledger>
+    + findMembers(ledgerId): List<LedgerMember>
+  }
+  interface "条目仓储" as EntryRepository {
+    + findById(entryId): Optional<Entry>
+    + save(entry): Entry
+    + search(ledgerId, query): Page<Entry>
+    + countApprovedByFingerprint(f): long
+  }
+  interface "作废申请仓储" as VoidRequestRepository {
+    + save(req): VoidRequest
+    + findPendingByLedger(ledgerId): List<VoidRequest>
+  }
+  interface "存档仓储" as OperationLogRepository {
+    + append(log): OperationLog
+    + lastHash(ledgerId): String
+  }
+
+EntryService ..> PermissionPolicy
+EntryService ..> DuplicateChecker
+EntryService ..> AmountLimitPolicy
+EntryService ..> EntryWorkflow
+EntryService ..> AttachmentService
+EntryService ..> EntryRepository
+EntryService ..> AuditLogService
+
+ReviewService ..> EntryWorkflow
+ReviewService ..> AttachmentService
+ReviewService ..> EntryRepository
+ReviewService ..> AuditLogService
+
+VoidRequestService ..> VoidApprovalPolicy
+VoidRequestService ..> EntryWorkflow
+VoidRequestService ..> VoidRequestRepository
+VoidRequestService ..> LedgerRepository
+VoidRequestService ..> AuditLogService
+
+StatisticsService ..> EntryRepository
+AuditLogService ..> OperationLogRepository
+PermissionPolicy ..> LedgerRepository
+DuplicateChecker ..> EntryRepository
+
+note right of EntryService
+  提交入口统一按顺序执行：
+  权限 → 字段/金额 → 重复检测
+  → 严格审核判定 → 落库 → 存档。
+end note
+
+note bottom of StatisticsService
+  所有统计方法在仓储层固定追加
+  status = 'APPROVED' 条件。
+end note
+
+@enduml
