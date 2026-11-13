@@ -1,0 +1,31 @@
+# 静态分析与代码风格配置。
+#
+# 实验三要求「遵守所使用编程语言的代码风格」。Dart 的官方风格由
+# `dart format` 保证排版，由 `flutter analyze` 保证语义与命名规范。
+# 这里在 flutter_lints 推荐集之上再启用若干严格规则。
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - macos/**
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    # 私有字段无法作为跨库可见的命名参数（`this._db` 在库外不可调用），
+    # 因此服务类统一采用「公开命名参数 + 初始化列表赋私有字段」的写法，
+    # 该写法与本条 lint 的建议冲突，属于误报，故关闭。
+    prefer_initializing_formals: false
+
+    prefer_single_quotes: true
+    always_declare_return_types: true
+    avoid_dynamic_calls: true
+    prefer_final_locals: true
+    require_trailing_commas: true
+    unawaited_futures: true
+    directives_ordering: true
+    omit_local_variable_types: false

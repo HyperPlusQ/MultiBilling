@@ -1,0 +1,24 @@
+name: multibilling
+description: "MultiBilling 团队共享记账桌面应用（软件工程实验三）"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.14.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Flutter 3.47+ 起 Material 组件库独立为 material_ui，替代 flutter/material.dart。
+  material_ui: ^1.11.0
+  # 附件内容摘要与操作存档哈希链都依赖 SHA-256。
+  crypto: ^3.0.6
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

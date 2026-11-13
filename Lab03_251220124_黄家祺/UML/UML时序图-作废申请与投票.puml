@@ -1,0 +1,81 @@
+@startuml UML时序图-作废申请与投票
+' MultiBilling - 作废申请与投票时序图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam sequence {
+  ArrowColor #475569
+  LifeLineBorderColor #CBD5E1
+  LifeLineBackgroundColor #F8FAFC
+  ParticipantBackgroundColor #E6F4F1
+  ParticipantBorderColor #0F766E
+  ActorBackgroundColor #E6F4F1
+  ActorBorderColor #0F766E
+  GroupBackgroundColor #F8FAFC
+  GroupBorderColor #CBD5E1
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #F59E0B
+}
+
+title MultiBilling 作废申请与投票时序图
+
+actor "管理员 A\n（发起人）" as A
+actor "管理员 B / C" as B
+participant "审核页面\nReviewPage" as Page
+participant "作废服务\nVoidRequestService" as Service
+participant "权限策略\nPermissionPolicy" as Perm
+participant "投票策略\nVoidApprovalPolicy" as Policy
+participant "作废申请仓储\nVoidRequestRepository" as RequestRepo
+participant "投票仓储\nVoidVoteRepository" as VoteRepo
+participant "条目仓储\nEntryRepository" as EntryRepo
+participant "存档服务\nAuditLogService" as Audit
+
+A -> Page : 对已审核条目发起作废\n填写原因并二次确认
+Page -> Service : initiate(entryId, reason, adminA)
+Service -> Perm : canInitiateVoid(adminA, entry)
+Perm --> Service : true
+Service -> EntryRepo : findById(entryId)
+EntryRepo --> Service : entry(status = APPROVED)
+Service -> RequestRepo : save(VoidRequest\nstatus = PENDING,\nadminCountSnapshot,\ndeadline = now + 72h)
+Service -> Audit : record(VoidRequested)
+Service --> Page : 202 Accepted
+
+Page --> B : 生成“待我投票”任务\n（应用内待办）
+B -> Page : 查看作废理由与条目存档
+B -> Page : 投票“同意”并二次确认
+Page -> Service : vote(requestId, AGREE, adminB)
+Service -> VoteRepo : existsByRequestAndAdmin()?
+VoteRepo --> Service : false
+Service -> VoteRepo : save(VoidVote)
+Service -> Policy : evaluate(adminCountSnapshot,\nagreeCount, deadline)
+Policy --> Service : PASSED / VOTING / EXPIRED
+
+alt 同意票满足严格多数（agree × 2 > adminCount）
+  Service -> RequestRepo : status = APPROVED
+  Service -> EntryRepo : entry.status = INVALID
+  Service -> Audit : record(VoidApproved)
+  Service --> Page : 作废成功，条目移入无效板块
+else 未达多数且未超时
+  Service -> RequestRepo : status = PENDING
+  Service --> Page : 记录投票，继续等待
+else 已超时
+  Service -> RequestRepo : status = EXPIRED
+  Service -> Audit : record(VoidExpired)
+  Service --> Page : 申请失效，条目保持已审核
+end
+
+note over Service, Policy
+  管理员总数在申请创建时快照，避免中途
+  增减管理员导致阈值漂移；“半数以上”按
+  严格多数实现，即同意票 > 管理员总数 / 2。
+end note
+
+note over Service, Audit
+  同一管理员对同一申请只能投一票（唯一索引）；
+  投票、状态变更与存档在同一事务内完成。
+end note
+
+@enduml

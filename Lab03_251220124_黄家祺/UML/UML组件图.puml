@@ -1,0 +1,131 @@
+@startuml UML组件图
+' MultiBilling - 组件图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam nodesep 26
+skinparam ranksep 42
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #94A3B8
+  FontColor #0F172A
+}
+skinparam package {
+  BackgroundColor #F8FAFC
+  BorderColor #CBD5E1
+  FontColor #0F172A
+  FontStyle bold
+}
+skinparam database {
+  BackgroundColor #E6F4F1
+  BorderColor #0F766E
+}
+skinparam cloud {
+  BackgroundColor #EFF6FF
+  BorderColor #2563EB
+}
+hide stereotype
+
+title MultiBilling 组件图
+
+package "客户端层 Web Client（响应式）" {
+  [单页应用 SPA\nVue 3 + TypeScript] as Spa
+  [登录 / 账户] as C1
+  [账本与成员] as C2
+  [条目与检索] as C3
+  [审核与投票] as C4
+  [统计报表] as C5
+  [操作存档] as C6
+}
+
+package "接入层 Gateway" {
+  [Nginx\nHTTPS / 静态资源 / 反向代理] as Nginx
+}
+
+package "应用层 Spring Boot" {
+  [REST 控制器层\nControllers] as Api
+  [认证与访问控制\nAuth & RBAC] as Auth
+  [账本服务\nLedger] as LedgerSvc
+  [成员与权限服务\nMembership] as MemberSvc
+  [条目服务\nEntry] as EntrySvc
+  [审核工作流\nReview] as ReviewSvc
+  [统计服务\nStatistics] as StatsSvc
+  [存档服务\nAuditLog] as AuditSvc
+  [附件服务\nAttachment] as FileSvc
+  [领域事件\nDomain Events] as Events
+}
+
+package "基础设施层 Infrastructure" {
+  database "MySQL 8.0\n业务数据 + 存档" as MySQL
+  database "Redis 7\n会话 / 缓存 / 锁" as Redis
+  cloud "MinIO\n附件对象存储" as MinIO
+}
+
+' 客户端内部模块复用 SPA
+C1 ..> Spa
+C2 ..> Spa
+C3 ..> Spa
+C4 ..> Spa
+C5 ..> Spa
+C6 ..> Spa
+
+Spa --> Nginx : HTTPS / WSS
+Nginx --> Api : 反向代理 /api/**
+
+' 控制器到领域服务
+Api --> Auth
+Api --> LedgerSvc
+Api --> MemberSvc
+Api --> EntrySvc
+Api --> ReviewSvc
+Api --> StatsSvc
+Api --> AuditSvc
+Api --> FileSvc
+
+' 应用组件之间的核心依赖
+Auth ..> MemberSvc : 校验账本成员
+LedgerSvc ..> MemberSvc : 初始化发起者
+EntrySvc ..> MemberSvc : 成员校验
+EntrySvc ..> ReviewSvc : 提交后进入待审核
+ReviewSvc ..> EntrySvc : 状态变更
+ReviewSvc ..> FileSvc : 校验证明附件
+StatsSvc ..> EntrySvc : 只读查询已审核条目
+FileSvc ..> MemberSvc : 下载权限校验
+AuditSvc ..> Events : 订阅操作事件
+
+' 基础设施依赖
+Auth --> Redis : 会话 / 刷新令牌
+LedgerSvc --> MySQL
+MemberSvc --> MySQL
+EntrySvc --> MySQL
+ReviewSvc --> MySQL
+StatsSvc --> MySQL
+AuditSvc --> MySQL : 追加写
+FileSvc --> MinIO : S3 API
+FileSvc --> MySQL : 元数据
+AuditSvc --> Redis : 每账本写锁
+
+note right of AuditSvc
+  所有写操作通过领域事件汇入存档服务；
+  存档表仅追加，按账本维护哈希链。
+end note
+
+note bottom of StatsSvc
+  统计查询固定附加 status = 'APPROVED'，
+  确保未审核、已驳回、无效条目不参与统计。
+end note
+
+note right of Nginx
+  路由约定：
+  /api/auth/** 认证
+  /api/ledgers/** 账本与成员
+  /api/ledgers/*/entries/** 条目
+  /api/ledgers/*/reviews/** 审核
+  /api/ledgers/*/stats/** 统计
+  /api/ledgers/*/logs/** 存档
+  /api/files/** 附件
+end note
+
+@enduml

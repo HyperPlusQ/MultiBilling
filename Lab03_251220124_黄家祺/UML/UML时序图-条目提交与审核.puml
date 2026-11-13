@@ -1,0 +1,95 @@
+@startuml UML时序图-条目提交与审核
+' MultiBilling - 条目提交与审核时序图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam sequence {
+  ArrowColor #475569
+  LifeLineBorderColor #CBD5E1
+  LifeLineBackgroundColor #F8FAFC
+  ParticipantBackgroundColor #E6F4F1
+  ParticipantBorderColor #0F766E
+  ActorBackgroundColor #E6F4F1
+  ActorBorderColor #0F766E
+  GroupBackgroundColor #F8FAFC
+  GroupBorderColor #CBD5E1
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #F59E0B
+}
+
+title MultiBilling 条目提交与审核时序图
+
+actor "成员" as Member
+participant "条目页面\nEntryPage" as Page
+participant "条目接口\nEntryController" as Controller
+participant "条目服务\nEntryService" as EntrySvc
+participant "权限策略\nPermissionPolicy" as Perm
+participant "重复检测器\nDuplicateChecker" as Dup
+participant "金额限制策略\nAmountLimitPolicy" as Amount
+participant "条目工作流\nEntryWorkflow" as Flow
+participant "条目仓储\nEntryRepository" as Repo
+participant "存档服务\nAuditLogService" as Audit
+actor "管理员" as Admin
+
+Member -> Page : 填写名称、时间、金额、类别、原因\n并可选上传附件
+Page -> Controller : POST /api/ledgers/{ledgerId}/entries
+Controller -> EntrySvc : submit(command, currentUser)
+EntrySvc -> Perm : canSubmit(user, ledger)
+Perm --> EntrySvc : true / 403
+
+EntrySvc -> EntrySvc : validateRequiredFields()\nvalidateAmount()\nvalidateLedgerPeriod()
+
+EntrySvc -> Dup : findDuplicates(ledgerId,\ndirection, amount, occurredAt)
+Dup -> Repo : queryByFingerprint(...)
+Repo --> Dup : List<Entry>
+Dup --> EntrySvc : duplicates
+
+opt 存在重复且未提供证明附件
+  EntrySvc --> Controller : throw DuplicateProofRequired
+  Controller --> Page : 400 DUPLICATE_PROOF_REQUIRED
+  Page --> Member : 高亮提示“需上传证明附件”
+end
+EntrySvc -> Amount : requiresStrictReview(ledger, amount)
+Amount --> EntrySvc : true / false
+EntrySvc -> Flow : transition(entry, SUBMIT, user)
+Flow --> EntrySvc : PENDING
+EntrySvc -> Repo : save(entry)
+Repo --> EntrySvc : entryId
+EntrySvc -> Audit : record(EntrySubmitted)
+Audit -> Audit : append(hash = SHA-256(prevHash + payload))
+EntrySvc --> Controller : 201 Created
+Controller --> Page : 条目已提交，进入未审核
+
+Admin -> Page : 打开待审核条目详情
+Page -> Controller : GET /api/ledgers/{ledgerId}/entries/{entryId}
+Controller -> EntrySvc : getDetail(entryId, currentUser)
+EntrySvc -> Perm : canView(member, ledgerId)
+EntrySvc --> Page : EntryDetailVO（含附件、审核记录）
+
+Admin -> Page : 审核通过 / 打回 / 要求补充材料
+Page -> Controller : POST /api/entries/{entryId}/reviews
+Controller -> EntrySvc : review(entryId, action, comment, admin)
+EntrySvc -> Flow : transition(entry, action, admin)
+alt 审核通过
+  Flow --> EntrySvc : APPROVED
+else 打回
+  Flow --> EntrySvc : REJECTED
+else 要求补充材料
+  Flow --> EntrySvc : PENDING\nsupplementRequested = true
+end
+EntrySvc -> Repo : updateStatus(entry, expectedVersion)
+Repo --> EntrySvc : rows = 1
+EntrySvc -> Audit : record(EntryReviewed)
+Audit -> Audit : append(hash chain)
+EntrySvc --> Controller : 200 OK
+Controller --> Page : 审核完成，刷新分区与待办
+
+note over EntrySvc, Audit
+  状态变更与存档写入在同一数据库事务中；
+  通过 version 字段做乐观锁，避免并发审核覆盖。
+end note
+
+@enduml

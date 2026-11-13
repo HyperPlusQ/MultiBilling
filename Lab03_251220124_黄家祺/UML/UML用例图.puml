@@ -1,0 +1,99 @@
+@startuml UML用例图
+' MultiBilling - 用例图
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "PingFang SC"
+skinparam dpi 200
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam nodesep 34
+skinparam ranksep 38
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #94A3B8
+  FontColor #0F172A
+  ArrowColor #475569
+}
+skinparam actor {
+  BackgroundColor #E6F4F1
+  BorderColor #0F766E
+}
+left to right direction
+
+title MultiBilling 用例图
+
+package "参与者" {
+  actor "账本成员" as Member
+  actor "管理员" as Admin
+  actor "发起者" as Owner
+  actor "游客" as Guest
+}
+
+Member <|-- Admin
+Admin <|-- Owner
+
+package "MultiBilling 多人共享记账系统（用例）" {
+  usecase "注册 / 登录" as UC01
+  usecase "创建账本" as UC02
+  usecase "邀请成员加入" as UC03
+  usecase "退出账本" as UC04
+  usecase "转让发起者" as UC05
+  usecase "设置 / 取消管理员" as UC06
+  usecase "设置金额限制\n与严格审核规则" as UC07
+  usecase "提交收支条目" as UC08
+  usecase "编辑草稿 /\n被驳回条目" as UC09
+  usecase "上传证明附件" as UC10
+  usecase "搜索与筛选条目" as UC11
+  usecase "查看条目详情" as UC12
+  usecase "审核条目\n（通过 / 打回）" as UC13
+  usecase "要求补充材料" as UC14
+  usecase "申请修改已审核条目" as UC15
+  usecase "审批修改申请" as UC16
+  usecase "发起作废申请" as UC17
+  usecase "参与作废投票" as UC18
+  usecase "查看账本总览" as UC19
+  usecase "按类别 / 成员 / 时间 /\n金额统计" as UC20
+  usecase "查看操作存档" as UC21
+  usecase "校验存档完整性" as UC22
+}
+
+' 参与者与用例
+Guest --> UC01
+Member --> UC04
+Member --> UC08
+Member --> UC09
+Member --> UC11
+Member --> UC12
+Member --> UC15
+Member --> UC19
+Member --> UC20
+Member --> UC21
+Member --> UC22
+Admin --> UC13
+Admin --> UC14
+Admin --> UC16
+Admin --> UC17
+Admin --> UC18
+Owner --> UC02
+Owner --> UC03
+Owner --> UC05
+Owner --> UC06
+Owner --> UC07
+
+' 用例之间的关系
+UC08 ..> UC10 : <<extend>>\n重复提交必须附证明
+UC15 ..> UC10 : <<include>>\n修改申请必须附图
+UC13 ..> UC14 : <<extend>>
+UC17 ..> UC18 : 触发投票
+UC22 ..> UC21 : <<extend>>\n管理员校验
+
+note right of UC10
+  证明附件与条目分离存储；
+  下载前必须通过账本成员校验。
+end note
+
+note bottom of UC20
+  统计口径固定为"仅已审核条目"，
+  支持类别、成员、时间、金额组合。
+end note
+
+@enduml
