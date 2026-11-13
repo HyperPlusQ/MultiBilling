@@ -279,9 +279,28 @@ No issues found! (ran in 3.0s)</pre>
   <tr><td>忽略规则</td><td>.gitignore 排除 build/、.dart_tool/、.idea/ 等生成物</td></tr>
 </table>
 <h2>7.2 提交历史</h2>
-<pre id="gitlog">（见仓库 git log --oneline）</pre>
+<pre id="gitlog">$ git log --oneline
+0f33f75 lab3: 软件实现与构建（251220124 黄家祺）Flutter 桌面实现 + 129 测试 + UML + 报告
+d715f19 lab2: 软件设计与建模实验报告（251220124 黄家祺）
+daef3ae lab1-final: 人工审查后的最终需求与完整访谈、AI 交互及审查记录（REQ-001~REQ-017，REV-001~REV-004）
+32bfeef lab1-ai-draft: 访谈记录与 AI 首次生成的需求初稿（REQ-001~REQ-015）
+
+$ git push origin main
+   d715f19..0f33f75  main -> main</pre>
 <h2>7.3 远程目录结构</h2>
-<pre id="gittree">（见 GitHub 仓库 main 分支目录）</pre>
+<pre id="gittree">MultiBilling (main)
+├── .gitignore
+├── chat.txt / requirements.md          # 实验一
+├── Lab02_251220124_黄家祺/              # 实验二（UML/UI界面/报告）
+└── Lab03_251220124_黄家祺/              # 实验三
+    ├── code/                           # Flutter 工程源码
+    │   ├── lib/  test/  macos/
+    │   ├── pubspec.yaml  pubspec.lock
+    │   └── analysis_options.yaml  README.md
+    ├── UML/                            # 9 组 png + puml
+    ├── 界面截图/                        # 8 张真实渲染界面图
+    ├── report.html
+    └── 实验报告.pdf</pre>
 
 <h1>八、需求覆盖与测试矩阵</h1>
 <table>
